@@ -1,11 +1,11 @@
 'use client';
 
 import { useUser, useFirestore } from '@/firebase';
-// FIX: Imported Timestamp type
 import { doc, getDoc, setDoc, serverTimestamp, Timestamp } from 'firebase/firestore';
 import { useEffect, useState } from 'react';
 import type { Doctor } from '@/lib/types';
 import DoctorProfileForm from '../forms/DoctorProfileForm';
+import SubscriptionStatusBanner from '../ui/SubscriptionStatusBanner'; // VIENE DE: Subscription Logic
 
 // A simple loading spinner component
 const LoadingSpinner = () => (
@@ -75,7 +75,6 @@ export default function DoctorDashboard() {
                     setDoctorProfile(docSnap.data() as Doctor);
                     setProfileExists(true);
                 } else {
-                    // Profile doesn't exist, this is not an error, but a state.
                     setProfileExists(false);
                 }
             } catch (err) {
@@ -100,6 +99,7 @@ export default function DoctorDashboard() {
                 uid: user.uid,
                 email: user.email!,
                 createdAt: serverTimestamp() as Timestamp,
+                subscriptionStatus: 'Trial', // Default status for new profiles
             };
             await setDoc(doctorDocRef, fullProfile);
             setDoctorProfile(fullProfile);
@@ -120,7 +120,6 @@ export default function DoctorDashboard() {
         return <div className="text-red-500 text-center p-4">{error}</div>;
     }
 
-    // If the profile doesn't exist, show the creation form.
     if (!profileExists) {
         return (
             <div className="container mx-auto py-8">
@@ -131,7 +130,6 @@ export default function DoctorDashboard() {
         );
     }
     
-    // If profile exists, but data is somehow null (should not happen)
     if (!doctorProfile) {
         return <div className="text-center p-8">Perfil no disponible. Contacta a soporte.</div>;
     }
@@ -139,6 +137,11 @@ export default function DoctorDashboard() {
     // Render the full dashboard if the profile exists
     return (
         <div className="container mx-auto py-8 bg-gray-50">
+            {/* Subscription Status Banner is now integrated */}
+            <SubscriptionStatusBanner 
+                status={doctorProfile.subscriptionStatus}
+                createdAt={doctorProfile.createdAt}
+            />
             <DoctorProfileHeader doctor={doctorProfile} />
             <DoctorStatsCards doctor={doctorProfile} />
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
