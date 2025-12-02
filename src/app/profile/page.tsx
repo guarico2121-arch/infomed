@@ -4,10 +4,12 @@ import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useUser, useFirestore } from '@/firebase';
 import { doc, getDoc } from 'firebase/firestore';
+import type { UserProfile } from '@/lib/types';
 
 import DoctorDashboard from '@/components/dashboards/DoctorDashboard';
 import PatientDashboard from '@/components/dashboards/PatientDashboard';
 
+// A consistent loading spinner
 const LoadingSpinner = () => (
     <div className="flex justify-center items-center h-screen">
         <div className="animate-spin rounded-full h-32 w-32 border-t-2 border-b-2 border-blue-500"></div>
@@ -18,62 +20,54 @@ export default function ProfilePage() {
     const { user, isUserLoading } = useUser();
     const firestore = useFirestore();
     const router = useRouter();
-    const [userRole, setUserRole] = useState<string | null>(null);
+
+    const [profile, setProfile] = useState<UserProfile | null>(null);
     const [isLoading, setIsLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
 
     useEffect(() => {
-        if (isUserLoading || !firestore) return;
+        // Primary guard: Wait for user authentication to be resolved
+        if (isUserLoading) {
+            return; 
+        }
 
+        // If no user is logged in after loading, redirect to login
         if (!user) {
             router.push('/login');
             return;
         }
 
-        const fetchUserRole = async () => {
-            setIsLoading(true);
-            const userDocRef = doc(firestore, 'users', user.uid);
+        // Guard for Firestore availability
+        if (!firestore) {
+            setIsLoading(false);
+            setError('Servicio de base de datos no disponible.');
+            return;
+        }
 
+        const fetchUserProfile = async () => {
+            const userDocRef = doc(firestore, 'users', user.uid);
             try {
                 const docSnap = await getDoc(userDocRef);
-
                 if (docSnap.exists()) {
-                    const data = docSnap.data();
-                    // Normalize roles to lowercase for case-insensitive comparison, respecting SSOT.
-                    const roles: string[] = (data?.roles || []).map((role: string) => role.toLowerCase());
-
-                    if (roles.includes('admin')) {
-                        setUserRole('Admin');
-                    } else if (roles.includes('doctor')) {
-                        setUserRole('Doctor');
-                    } else if (roles.includes('patient')) {
-                        setUserRole('Patient');
-                    } else {
-                        // This error now only triggers if the roles array is empty or contains no valid roles.
-                        setError('El usuario no tiene un rol asignado.');
-                    }
+                    setProfile(docSnap.data() as UserProfile);
                 } else {
-                    setError('El perfil de usuario no existe. Contacta a soporte.');
+                    setError('El perfil de usuario no fue encontrado en la base de datos.');
                 }
-            } catch (err: any) {
-                console.error("Error fetching user role:", err);
-                setError('No se pudo verificar el rol del usuario.');
+            } catch (err) {
+                console.error("Error fetching user profile:", err);
+                setError('Ocurrió un error al cargar tu perfil.');
             } finally {
                 setIsLoading(false);
             }
         };
 
-        fetchUserRole();
+        fetchUserProfile();
 
     }, [user, isUserLoading, firestore, router]);
 
-    useEffect(() => {
-        if (userRole === 'Admin') {
-            router.replace('/admin/dashboard');
-        }
-    }, [userRole, router]);
+    // Render states based on the hook's progress
 
-    if (isLoading || isUserLoading || userRole === 'Admin') {
+    if (isLoading) {
         return <LoadingSpinner />;
     }
 
@@ -81,12 +75,28 @@ export default function ProfilePage() {
         return <div className="text-red-500 p-4 bg-red-100 rounded-md container mx-auto my-8">Error: {error}</div>;
     }
 
-    switch (userRole) {
-        case 'Doctor':
-            return <DoctorDashboard />;
-        case 'Patient':
-            return <PatientDashboard />;
-        default:
-            return <LoadingSpinner />;
+    if (!profile || !profile.roles || profile.roles.length === 0) {
+        // This is the definitive error state. It only triggers if the profile is loaded but has no roles.
+        return <div className="text-red-500 p-4 bg-red-100 rounded-md container mx-auto my-8">Error: El usuario no tiene un rol asignado.</div>;
     }
+
+    // Role-based routing and rendering
+    // The role is checked *after* the profile has been successfully loaded.
+    const primaryRole = profile.roles.map(role => role.toLowerCase())[0]; // Get the primary role
+
+    if (primaryRole.includes('admin')) {
+        router.replace('/admin/dashboard');
+        return <LoadingSpinner />; // Show loader while redirecting
+    }
+
+    if (primaryRole.includes('doctor')) {
+        return <DoctorDashboard />;
+    }
+
+    if (primaryRole.includes('patient')) {
+        return <PatientDashboard />;
+    }
+
+    // Fallback if role is something unexpected
+    return <div className="text-red-500 p-4 bg-red-100 rounded-md container mx-auto my-8">Error: Rol de usuario no reconocido.</div>;
 }
