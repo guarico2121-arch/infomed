@@ -4,21 +4,6 @@ import { getFirestore, type Firestore } from 'firebase-admin/firestore';
 import { getAuth, type Auth } from 'firebase-admin/auth';
 import { credential } from 'firebase-admin';
 
-// Define the shape of the service account key for type safety
-interface ServiceAccount {
-  type: string;
-  project_id: string;
-  private_key_id: string;
-  private_key: string;
-  client_email: string;
-  client_id: string;
-  auth_uri: string;
-  token_uri: string;
-  auth_provider_x509_cert_url: string;
-  client_x509_cert_url: string;
-  universe_domain: string;
-}
-
 // This function provides a single, reliable initialization path for the server.
 export function initializeFirebaseAdmin(): { firebaseApp: App; auth: Auth; firestore: Firestore } {
   if (getApps().length) {
@@ -44,15 +29,25 @@ export function initializeFirebaseAdmin(): { firebaseApp: App; auth: Auth; fires
   } else {
     // We are in a local or non-production environment.
     // Dynamically import the service account key to avoid build errors in production.
-    // eslint-disable-next-line @typescript-eslint/no-var-requires
-    const serviceAccount = require('../../serviceAccountKey.json');
-    const firebaseApp = initializeApp({
-        credential: credential.cert(serviceAccount as ServiceAccount)
-    });
-    return {
-      firebaseApp,
-      auth: getAuth(firebaseApp),
-      firestore: getFirestore(firebaseApp),
-    };
+    try {
+      // eslint-disable-next-line @typescript-eslint/no-var-requires
+      const serviceAccount = require('../../serviceAccountKey.json');
+      const firebaseApp = initializeApp({
+          credential: credential.cert(serviceAccount)
+      });
+      return {
+        firebaseApp,
+        auth: getAuth(firebaseApp),
+        firestore: getFirestore(firebaseApp),
+      };
+    } catch (e) {
+      console.error('serviceAccountKey.json not found, initializing admin SDK without it for local development. This may lead to runtime errors.');
+      const firebaseApp = initializeApp();
+      return {
+        firebaseApp,
+        auth: getAuth(firebaseApp),
+        firestore: getFirestore(firebaseApp),
+      };
+    }
   }
 }
