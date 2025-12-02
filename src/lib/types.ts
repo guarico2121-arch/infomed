@@ -1,33 +1,35 @@
 import type { Timestamp } from 'firebase/firestore';
 
+// Represents the detailed professional profile of a doctor stored in 'doctor_profiles'
 export interface Doctor {
-  id: string;
-  slug: string;
+  uid: string; // Corresponds to the Firebase Auth UID
+  email: string;
   name: string;
-  email?: string;
   specialty: string;
-  location: string;
+  experienceYears: number;
+  cost: number;
   city: string;
+  bio?: string;
+  createdAt: Timestamp;
+
+  // Optional fields that can be added later
+  slug?: string;
+  location?: string;
   rating?: number;
   reviews?: number;
-  bio: string;
-  isFeatured: boolean;
-  image: string;
-  experienceYears: number;
+  isFeatured?: boolean;
+  image?: string;
   healthRegistryNumber?: string;
   medicalFederationNumber?: string;
-  // availability is an object with day of week as key (0=Sun, 1=Mon,...)
-  availability: {
+  availability?: {
     [key: number]: { startTime: string; endTime: string }[];
   };
-  insurances: string[];
+  insurances?: string[];
   googleMapsUrl?: string;
-  cost: number;
-  profilePictureUrl?: string; // Ensure this is part of the type
-  posts?: Post[]; // Make posts optional
+  profilePictureUrl?: string;
+  posts?: Post[];
   subscriptionStatus?: 'Trial' | 'Active' | 'Suspended' | 'Expired';
   address?: string;
-  biography?: string;
 }
 
 export interface Post {
@@ -80,16 +82,15 @@ export enum BloodType {
   O_NEGATIVE = "O-",
 }
 
+// Represents the basic user info stored in the 'users' collection
 export interface UserProfile {
-    id: string;
-    firstName?: string;
-    lastName?: string;
+    uid: string;
+    email: string;
     name?: string;
-    email?: string;
-    bloodType?: BloodType;
     photoURL?: string;
-    roles?: string[];
-    profilePictureUrl?: string;
+    roles: ('Admin' | 'Doctor' | 'Patient')[];
+    createdAt: Timestamp;
+    bloodType?: BloodType;
 }
 
 export interface Banner {

@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useUser, useFirestore } from '@/firebase';
-import { doc, getDoc, setDoc, serverTimestamp } from 'firebase/firestore';
+import { doc, getDoc } from 'firebase/firestore';
 
 import DoctorDashboard from '@/components/dashboards/DoctorDashboard';
 import PatientDashboard from '@/components/dashboards/PatientDashboard';
@@ -20,34 +20,29 @@ export default function ProfilePage() {
     const firestore = useFirestore();
     const router = useRouter();
     const [userRole, setUserRole] = useState<string | null>(null);
-    const [isLoadingRole, setIsLoadingRole] = useState(true);
+    const [isLoading, setIsLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
 
     useEffect(() => {
+        // Wait until we have all dependencies
         if (isUserLoading || !firestore) return;
 
+        // If no user is logged in, redirect to login page
         if (!user) {
             router.push('/login');
             return;
         }
 
         const fetchUserRole = async () => {
+            setIsLoading(true);
+            const userDocRef = doc(firestore, 'users', user.uid);
+
             try {
-                const userDocRef = doc(firestore, 'users', user.uid);
                 const docSnap = await getDoc(userDocRef);
 
                 if (docSnap.exists()) {
-                    const data = docSnap.data();
-                    let roles = data.roles || [];
-
-                    // Self-healing for users with no roles assigned
-                    if (roles.length === 0) {
-                        console.warn(`User ${user.uid} found with no roles. Defaulting to 'Patient'.`);
-                        const roleToAssign = user.email === 'admin@informed.com' ? 'Admin' : 'Patient';
-                        await setDoc(userDocRef, { roles: [roleToAssign] }, { merge: true });
-                        roles = [roleToAssign]; // Use the newly assigned role for this session
-                    }
-                    
+                    const roles = docSnap.data()?.roles || [];
+                    // Find the primary role. We assume one user has one primary role for the dashboard.
                     if (roles.includes('Admin')) {
                         setUserRole('Admin');
                     } else if (roles.includes('Doctor')) {
@@ -55,30 +50,18 @@ export default function ProfilePage() {
                     } else if (roles.includes('Patient')) {
                         setUserRole('Patient');
                     } else {
-                        // This case should not be reached due to the self-healing logic, but is kept as a safe fallback.
-                        console.error(`Could not determine a valid role for user ${user.uid} with roles: ${roles}`);
-                        setError('No se pudo determinar un rol válido para el usuario.');
+                        // Fallback for users with no valid role
+                        setError('El usuario no tiene un rol asignado. Contacta a soporte.');
                     }
-
                 } else {
-                    // Self-healing for new users without a profile document
-                    console.warn('User profile document not found. Creating a default profile.');
-                    const roleToAssign = user.email === 'admin@informed.com' ? 'Admin' : 'Patient';
-                    const newUserProfile = {
-                        uid: user.uid,
-                        email: user.email,
-                        name: user.displayName || (roleToAssign === 'Admin' ? 'Admin User' : 'Nuevo Usuario'),
-                        roles: [roleToAssign],
-                        createdAt: serverTimestamp(),
-                    };
-                    await setDoc(userDocRef, newUserProfile);
-                    setUserRole(roleToAssign);
+                    // This case should be handled by registration logic, but as a fallback:
+                    setError('El perfil de usuario no existe. Contacta a soporte.');
                 }
             } catch (err: any) {
-                console.error("Error handling user role:", err);
-                setError(err.message || 'No se pudo cargar la información del perfil.');
+                console.error("Error fetching user role:", err);
+                setError('No se pudo verificar el rol del usuario.');
             } finally {
-                setIsLoadingRole(false);
+                setIsLoading(false);
             }
         };
 
@@ -86,29 +69,31 @@ export default function ProfilePage() {
 
     }, [user, isUserLoading, firestore, router]);
 
-    // Handle redirection for Admin role
+    // Handle redirection for Admin role separately
     useEffect(() => {
         if (userRole === 'Admin') {
             router.replace('/admin/dashboard');
         }
     }, [userRole, router]);
 
-    if (isLoadingRole || isUserLoading || userRole === 'Admin') {
+    // Show a loading screen while we determine the role or if the user is an admin being redirected.
+    if (isLoading || isUserLoading || userRole === 'Admin') {
         return <LoadingSpinner />;
     }
 
+    // If there was an error determining the role
     if (error) {
         return <div className="text-red-500 p-4 bg-red-100 rounded-md container mx-auto my-8">Error: {error}</div>;
     }
 
-    // Render the correct dashboard based on the role
+    // Render the correct dashboard based on the determined role
     switch (userRole) {
         case 'Doctor':
             return <DoctorDashboard />;
         case 'Patient':
             return <PatientDashboard />;
         default:
-            // This state should ideally not be reached if loading and error states are handled correctly.
-            return <div className="text-center p-8">Determinando el rol del usuario...</div>;
+            // This state is temporary while the role is being determined, or if a role is invalid.
+            return <LoadingSpinner />;
     }
 }
