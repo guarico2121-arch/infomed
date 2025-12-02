@@ -1,19 +1,24 @@
+
 'use client';
 
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useUser, useFirestore } from '@/firebase';
 import { doc, getDoc } from 'firebase/firestore';
-import type { UserProfile } from '@/lib/types';
+import type { UserProfile, AnyUserProfile } from '@/lib/types';
 
 import DoctorDashboard from '@/components/dashboards/DoctorDashboard';
 import PatientDashboard from '@/components/dashboards/PatientDashboard';
+import { Loader2 } from 'lucide-react';
 
-// A consistent loading spinner
 const LoadingSpinner = () => (
     <div className="flex justify-center items-center h-screen">
-        <div className="animate-spin rounded-full h-32 w-32 border-t-2 border-b-2 border-blue-500"></div>
+        <Loader2 className="h-16 w-16 animate-spin text-blue-500" />
     </div>
+);
+
+const ErrorDisplay = ({ message }: { message: string }) => (
+    <div className="text-red-500 p-4 bg-red-100 rounded-md container mx-auto my-8">Error: {message}</div>
 );
 
 export default function ProfilePage() {
@@ -21,26 +26,23 @@ export default function ProfilePage() {
     const firestore = useFirestore();
     const router = useRouter();
 
-    const [profile, setProfile] = useState<UserProfile | null>(null);
+    const [profile, setProfile] = useState<AnyUserProfile | null>(null);
     const [isLoading, setIsLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
 
     useEffect(() => {
-        // Primary guard: Wait for user authentication to be resolved
         if (isUserLoading) {
-            return; 
+            return; // Espera a que la autenticación se resuelva.
         }
 
-        // If no user is logged in after loading, redirect to login
         if (!user) {
-            router.push('/login');
+            router.replace('/login'); // Si no hay usuario, redirige al login.
             return;
         }
 
-        // Guard for Firestore availability
         if (!firestore) {
-            setIsLoading(false);
             setError('Servicio de base de datos no disponible.');
+            setIsLoading(false);
             return;
         }
 
@@ -49,13 +51,22 @@ export default function ProfilePage() {
             try {
                 const docSnap = await getDoc(userDocRef);
                 if (docSnap.exists()) {
-                    setProfile(docSnap.data() as UserProfile);
+                    const userProfile = docSnap.data() as UserProfile;
+                    
+                    // El Guardián de Rol: si no hay rol, se redirige a la selección.
+                    if (!userProfile.role) {
+                        router.replace('/onboarding/select-role');
+                        return; // Detiene la ejecución aquí.
+                    }
+
+                    setProfile(userProfile as AnyUserProfile);
+
                 } else {
-                    setError('El perfil de usuario no fue encontrado en la base de datos.');
+                    setError('Tu perfil no fue encontrado. Contacta a soporte si esto es un error.');
                 }
             } catch (err) {
                 console.error("Error fetching user profile:", err);
-                setError('Ocurrió un error al cargar tu perfil.');
+                setError('Ocurrió un error inesperado al cargar tu perfil.');
             } finally {
                 setIsLoading(false);
             }
@@ -65,38 +76,30 @@ export default function ProfilePage() {
 
     }, [user, isUserLoading, firestore, router]);
 
-    // Render states based on the hook's progress
-
     if (isLoading) {
         return <LoadingSpinner />;
     }
 
     if (error) {
-        return <div className="text-red-500 p-4 bg-red-100 rounded-md container mx-auto my-8">Error: {error}</div>;
+        return <ErrorDisplay message={error} />;
     }
 
-    if (!profile || !profile.roles || profile.roles.length === 0) {
-        // This is the definitive error state. It only triggers if the profile is loaded but has no roles.
-        return <div className="text-red-500 p-4 bg-red-100 rounded-md container mx-auto my-8">Error: El usuario no tiene un rol asignado.</div>;
+    if (!profile) {
+        // Esto solo debería mostrarse brevemente o si hay un error no capturado.
+        return <LoadingSpinner />;
     }
 
-    // Role-based routing and rendering
-    // The role is checked *after* the profile has been successfully loaded.
-    const primaryRole = profile.roles.map(role => role.toLowerCase())[0]; // Get the primary role
-
-    if (primaryRole.includes('admin')) {
-        router.replace('/admin/dashboard');
-        return <LoadingSpinner />; // Show loader while redirecting
+    // Enrutamiento final basado en el rol del perfil ya cargado.
+    switch (profile.role) {
+        case 'Admin':
+            router.replace('/admin/dashboard');
+            return <LoadingSpinner />; // Muestra un loader mientras redirige.
+        case 'Doctor':
+            return <DoctorDashboard />;
+        case 'Patient':
+            return <PatientDashboard />;
+        default:
+            // Esto captura roles nulos o inesperados que se hayan colado.
+            return <ErrorDisplay message={`Rol de usuario no reconocido: ${profile.role}.`} />;
     }
-
-    if (primaryRole.includes('doctor')) {
-        return <DoctorDashboard />;
-    }
-
-    if (primaryRole.includes('patient')) {
-        return <PatientDashboard />;
-    }
-
-    // Fallback if role is something unexpected
-    return <div className="text-red-500 p-4 bg-red-100 rounded-md container mx-auto my-8">Error: Rol de usuario no reconocido.</div>;
 }

@@ -1,99 +1,75 @@
-'use client'
 
-import type { Timestamp } from 'firebase/firestore';
+// VIENE DE: Arquitectura de Usuario: SSOT y Roles Inmutables
+// Este archivo es la Fuente Única de Verdad (SSOT) para los tipos de datos en la aplicación.
 
-// ========================================================================
-// ADVERTISING & MONETIZATION TYPES
-// ========================================================================
+import { Timestamp } from 'firebase/firestore';
 
-export type AdTier = 15 | 25 | 50 | 100; // Represents the dollar amount invested daily
+// Roles inmutables definidos por la arquitectura.
+export type UserRole = 'Doctor' | 'Patient' | 'Clinic' | 'Admin';
 
-export interface AdCampaign {
-  isActive: boolean;
-  tier: AdTier;
-  dailyBudget: number; // The total impulse points for the day (e.g., 1500 for $15)
-  remainingBudget: number; // The current impulse points left for the day
-  startDate: Timestamp;
-}
-
-// ========================================================================
-// CORE USER, PROFILE, AND CONTENT TYPES
-// ========================================================================
-
+// Perfil base que todos los usuarios comparten.
+// Contiene la información de autenticación y el rol inmutable.
 export interface UserProfile {
   uid: string;
-  email: string | null;
-  name: string | null;
-  photoURL: string | null;
-  roles: string[]; 
-  createdAt: Timestamp;
-}
-
-// The comprehensive Doctor model for use in components like the profile page.
-export interface Doctor {
-  uid: string;
-  id: string; // Often the same as uid, used for slugs/keys
-  slug: string;
-  name: string;
   email: string;
-  specialty: string;
-  cost: number;
-  experienceYears: number;
-  city: string;
-  location: string;
-  subscriptionStatus: 'Trial' | 'Active' | 'Expired' | 'Pending';
-  createdAt: Timestamp;
-  adCampaign?: AdCampaign;
-  // Properties for the public profile, which were missing or inconsistent:
-  image?: string;
-  bio?: string;
-  rating: number;
-  reviews: number;
-  isFeatured?: boolean;
-  availability?: Record<string, any>; // Keeping flexible for now
-  insurances?: string[];
-  googleMapsUrl?: string;
-  // CRITICAL FIX: Added the missing fields for complete profile management.
-  contactPhone?: string;
-  instagramUrl?: string;
-  posts?: any[]; // Define a Post type later if needed
-}
-
-export interface Patient {
-  uid: string;
   name: string;
-  email: string;
-  bloodType: string; // e.g., 'O+'
+  role: UserRole | null; // El rol puede ser nulo hasta que el usuario lo seleccione en el onboarding.
   createdAt: Timestamp;
+  // Otros campos comunes pueden ir aquí.
 }
 
-// Represents a simplified version for display in search results
-export interface DoctorSearchResult {
-  uid: string;
-  name: string;
-  specialty: string;
-  city: string;
-  cost: number;
-  isVerified: boolean; // From subscription status
-  isPromoted: boolean;  // If they are being shown due to an ad campaign
+// Extiende el perfil de usuario para incluir datos específicos del Paciente.
+export interface Patient extends UserProfile {
+  role: 'Patient';
+  bloodType?: string; // Tipo de sangre, como se especifica en la data mínima.
+  // Otros campos específicos del paciente (historial médico, etc.)
 }
 
-// Type for patient ratings and comments (was missing)
-export interface Rating {
-    id: string;
-    doctorId: string;
-    patientId: string;
-    appointmentId: string;
-    rating: number;
-    comment: string;
-    createdAt: Timestamp;
+// Extiende el perfil de usuario para incluir datos específicos del Doctor.
+// Este es el perfil más complejo, sujeto al ciclo de vida de la suscripción.
+export interface Doctor extends UserProfile {
+  role: 'Doctor';
+  image?: string; // URL de la foto de perfil.
+  specialty: string; // Especialidad médica, dato mínimo requerido.
+  experienceYears: number; // Años de experiencia.
+  cost: number; // Costo de la consulta, SSOT para tarifas.
+  city: string; // Ciudad de la consulta.
+  location?: string; // Dirección del consultorio.
+  googleMapsUrl?: string; // URL de Google Maps para la ubicación.
+  contactPhone?: string; // Teléfono de contacto profesional.
+  instagramUrl?: string; // URL de perfil de Instagram.
+  bio?: string; // Biografía profesional.
+  subscriptionStatus: 'Trial' | 'Pending_Validation' | 'Active_Paid' | 'Expired'; // Estado de la suscripción.
+  // Campos relacionados a la suscripción.
+  subscriptionExpiresAt?: Timestamp;
 }
 
-// Type for doctor's temporary statuses/stories (was missing)
-export interface Status {
-    id: string;
-    mediaUrl: string;
-    caption?: string;
-    createdAt: Timestamp;
-    expiresAt: Timestamp;
+// Extiende el perfil de usuario para Clínicas.
+export interface Clinic extends UserProfile {
+  role: 'Clinic';
+  // Campos específicos de la clínica.
+}
+
+// Tipo de unión para cualquier tipo de perfil de usuario.
+export type AnyUserProfile = Patient | Doctor | Clinic | UserProfile;
+
+// Tipo para las publicaciones que los doctores pueden crear.
+export interface Post {
+  id: string;
+  doctorId: string;
+  authorName: string;
+  authorImage: string;
+  content: string;
+  createdAt: Timestamp;
+  likes: number;
+}
+
+// Tipo para las citas agendadas.
+export interface Appointment {
+  id: string;
+  patientId: string;
+  doctorId: string;
+  date: Timestamp;
+  status: 'Confirmed' | 'Cancelled' | 'Completed';
+  notes?: string;
 }
