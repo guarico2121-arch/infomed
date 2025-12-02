@@ -6,7 +6,6 @@ import Link from 'next/link';
 import {
   Star,
   ChevronLeft,
-  Heart,
   BriefcaseMedical,
   Users,
   MapPin,
@@ -14,6 +13,7 @@ import {
   Send,
   Lock,
   Clock,
+  ShieldCheck,
 } from 'lucide-react';
 import type { FC, Dispatch, SetStateAction } from 'react';
 import { useMemo, useState, useEffect } from 'react';
@@ -30,8 +30,6 @@ import { Textarea } from '@/components/ui/textarea';
 import { formatDistanceToNow } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { useToast } from '@/hooks/use-toast';
-import { errorEmitter } from '@/firebase/error-emitter';
-import { FirestorePermissionError } from '@/firebase/errors';
 import { cn } from '@/lib/utils';
 
 // Adapter to safely convert Firestore doc data to the strict Doctor type.
@@ -40,7 +38,7 @@ const DoctorProfileAdapter = (profile: any, ratingData: { average: number; count
     
     // This now matches the full Doctor type definition.
     return {
-        uid: profile.id, // Ensure uid is present
+        uid: profile.id, 
         id: profile.id,
         slug: profile.id,
         name: profile.name || 'Doctor Sin Nombre',
@@ -58,7 +56,6 @@ const DoctorProfileAdapter = (profile: any, ratingData: { average: number; count
         googleMapsUrl: profile.googleMapsUrl || '',
         cost: profile.cost || 0,
         posts: [],
-        // Default values for fields that might not be on the doc
         email: profile.email || '',
         subscriptionStatus: profile.subscriptionStatus || 'Expired',
         createdAt: profile.createdAt || Timestamp.now(),
@@ -117,7 +114,7 @@ const Comment: FC<{ rating: Rating }> = ({ rating }) => {
     );
 }
 
-// Strongly-typed Star Rating Input
+// Star Rating Input
 const StarRatingInput: FC<{ rating: number; setRating: Dispatch<SetStateAction<number>>; disabled?: boolean }> = ({ rating, setRating, disabled = false }) => {
   const [hover, setHover] = useState(0);
 
@@ -145,7 +142,7 @@ const StarRatingInput: FC<{ rating: number; setRating: Dispatch<SetStateAction<n
   );
 }
 
-// Strongly-typed Comments Feed
+// Comments Feed
 const CommentsFeed: FC<{ doctorId: string; doctorName: string }> = ({ doctorId, doctorName }) => {
     const { user, isUserLoading } = useUser();
     const firestore = useFirestore();
@@ -168,8 +165,16 @@ const CommentsFeed: FC<{ doctorId: string; doctorName: string }> = ({ doctorId, 
                 );
                 const querySnapshot = await getDocs(appointmentsQuery);
                 if (!querySnapshot.empty) {
-                    setCanReview(true);
-                    setCompletedAppointmentId(querySnapshot.docs[0].id);
+                    const reviewQuery = query(
+                        collection(firestore, 'ratings'),
+                        where('patientId', '==', user.uid),
+                        where('doctorId', '==', doctorId)
+                    );
+                    const reviewSnapshot = await getDocs(reviewQuery);
+                    if (reviewSnapshot.empty) {
+                        setCanReview(true);
+                        setCompletedAppointmentId(querySnapshot.docs[0].id);
+                    }
                 } else {
                     setCanReview(false);
                     setCompletedAppointmentId(null);
@@ -193,12 +198,8 @@ const CommentsFeed: FC<{ doctorId: string; doctorName: string }> = ({ doctorId, 
              toast({ title: 'No se puede enviar la reseña', description: 'Debes tener una cita completada para poder calificar.', variant: 'destructive' });
              return;
         }
-        if (!comment.trim()) {
-            toast({ title: 'El comentario está vacío', variant: 'destructive' });
-            return;
-        }
-        if (rating === 0) {
-            toast({ title: 'Debes seleccionar una calificación', variant: 'destructive' });
+        if (!comment.trim() || rating === 0) {
+            toast({ title: 'Calificación y comentario requeridos', variant: 'destructive' });
             return;
         }
 
@@ -206,34 +207,25 @@ const CommentsFeed: FC<{ doctorId: string; doctorName: string }> = ({ doctorId, 
         
         setIsSubmitting(true);
         try {
-            const ratingsCollection = collection(firestore, 'ratings');
-            const ratingData = {
-                doctorId: doctorId,
+            await addDoc(collection(firestore, 'ratings'), {
+                doctorId,
                 patientId: user.uid,
-                comment: comment,
-                rating: rating,
+                comment,
+                rating,
                 createdAt: serverTimestamp(),
                 appointmentId: completedAppointmentId,
-            };
-            await addDoc(ratingsCollection, ratingData);
-            toast({ title: '¡Comentario enviado!', description: 'Gracias por tu opinión.' });
+            });
+            toast({ title: '¡Comentario enviado!' });
             setComment('');
             setRating(0);
-            setCanReview(false);
-        } catch(error: unknown) { // Explicitly type error as unknown
+            setCanReview(false); // User has now reviewed.
+        } catch(error) {
              console.error("Error posting comment:", error);
-             toast({
-                title: 'Error al enviar comentario',
-                description: 'Hubo un problema. Intenta de nuevo.',
-                variant: 'destructive',
-            });
+             toast({ title: 'Error al enviar comentario', variant: 'destructive' });
         } finally {
             setIsSubmitting(false);
         }
     };
-
-    const shouldShowFeed = ratings && ratings.length > 0;
-    const shouldShowEmptyState = !isLoading && (!ratings || ratings.length === 0);
 
     return (
         <div className="space-y-6">
@@ -244,14 +236,13 @@ const CommentsFeed: FC<{ doctorId: string; doctorName: string }> = ({ doctorId, 
                     <div className="flex items-start gap-4">
                          <Avatar className="h-10 w-10 border">
                             <AvatarImage src={user.photoURL || undefined} />
-                            <AvatarFallback>{user.displayName?.substring(0, 2).toUpperCase() || user.email?.substring(0, 2).toUpperCase()}</AvatarFallback>
+                            <AvatarFallback>{user.displayName?.substring(0, 2).toUpperCase() || 'U'}</AvatarFallback>
                         </Avatar>
                         <div className="w-full space-y-4">
                              <Textarea
                                 placeholder={`Comparte tu experiencia con ${doctorName}...`}
                                 value={comment}
                                 onChange={(e) => setComment(e.target.value)}
-                                className="w-full focus-visible:ring-1 focus-visible:ring-ring focus-visible:ring-offset-0 p-2 shadow-none text-base"
                                 disabled={isSubmitting}
                             />
                             <div className="flex flex-col sm:flex-row justify-between items-center gap-4">
@@ -266,43 +257,31 @@ const CommentsFeed: FC<{ doctorId: string; doctorName: string }> = ({ doctorId, 
             </Card>
             )}
             {user && !canReview && !isUserLoading && (
-                <Card><CardContent className="p-6 text-center text-muted-foreground flex items-center justify-center gap-3"><Lock className="h-5 w-5" /><span>Debes completar una cita con este doctor para poder dejar una reseña.</span></CardContent></Card>
+                <Card><CardContent className="p-6 text-center text-muted-foreground flex items-center justify-center gap-3"><Lock className="h-5 w-5" /><span>Debes completar una cita para poder dejar una reseña.</span></CardContent></Card>
             )}
             {isLoading && (
-                <div className="space-y-4"><Skeleton className="h-28 w-full rounded-lg" /><Skeleton className="h-28 w-full rounded-lg" /></div>
+                <div className="space-y-4"><Skeleton className="h-28 w-full" /><Skeleton className="h-28 w-full" /></div>
             )}
-            {shouldShowFeed && ratings.map(rating => <Comment key={rating.id} rating={rating} />)}
-            {shouldShowEmptyState && (
+            {ratings?.map(r => <Comment key={r.id} rating={r} />)}
+            {!isLoading && ratings?.length === 0 && (
                 <Card className="my-6"><CardContent className="p-6 text-center text-muted-foreground">Este doctor aún no tiene reseñas.</CardContent></Card>
             )}
         </div>
     );
 }
 
-// Strongly-typed Doctor Statuses component
+// Doctor Statuses component
 const DoctorStatuses: FC<{ doctorId: string }> = ({ doctorId }) => {
     const firestore = useFirestore();
-    const now = new Date();
 
     const statusesQuery = useMemoFirebase(() => {
         if (!firestore || !doctorId) return null;
-        return query(collection(firestore, `doctor_profiles/${doctorId}/statuses`), where('expiresAt', '>', Timestamp.fromDate(now)), orderBy('expiresAt', 'desc'), limit(8));
+        return query(collection(firestore, `doctor_profiles/${doctorId}/statuses`), where('expiresAt', '>', Timestamp.now()), orderBy('expiresAt', 'desc'), limit(8));
     }, [firestore, doctorId]);
 
     const { data: statuses, isLoading } = useCollection<Status>(statusesQuery);
     
-    if (isLoading) {
-       return (
-         <div className="my-6">
-            <h2 className="font-headline text-xl font-bold mb-4">Estados Recientes</h2>
-            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
-                {Array.from({ length: 4 }).map((_, i) => <Skeleton key={i} className="aspect-square w-full rounded-lg" />)}
-            </div>
-        </div>
-       )
-    }
-
-    if (!statuses || statuses.length === 0) return null;
+    if (isLoading || !statuses || statuses.length === 0) return null;
 
     return (
         <div className="my-6">
@@ -310,7 +289,7 @@ const DoctorStatuses: FC<{ doctorId: string }> = ({ doctorId }) => {
             <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
                 {statuses.map(status => (
                     <div key={status.id} className="relative aspect-square rounded-lg overflow-hidden group">
-                        <Image src={status.mediaUrl} alt={status.caption || 'Estado del doctor'} fill className="object-cover" />
+                        <Image src={status.mediaUrl} alt={status.caption || 'Estado'} fill className="object-cover" />
                         <div className="absolute inset-0 bg-black/40 flex flex-col justify-end p-2 text-white">
                             {status.caption && <p className="text-xs font-semibold line-clamp-2">{status.caption}</p>}
                             <div className="flex items-center gap-1 text-xs opacity-80 mt-1">
@@ -324,7 +303,6 @@ const DoctorStatuses: FC<{ doctorId: string }> = ({ doctorId }) => {
         </div>
     );
 }
-
 
 export default function DoctorProfilePage() {
   const params = useParams();
@@ -343,40 +321,15 @@ export default function DoctorProfilePage() {
   const ratingData = useMemo(() => {
     if (areRatingsLoading || !ratings || ratings.length === 0) return { average: 0, count: 0 };
     const totalRating = ratings.reduce((acc, curr) => acc + curr.rating, 0);
-    const averageRating = totalRating / ratings.length;
-    return { average: parseFloat(averageRating.toFixed(1)), count: ratings.length };
+    const averageRating = parseFloat((totalRating / ratings.length).toFixed(1));
+    return { average: averageRating, count: ratings.length };
   }, [ratings, areRatingsLoading]);
 
   const doctor = useMemo(() => DoctorProfileAdapter(doctorProfile, ratingData), [doctorProfile, ratingData]);
+  const isVerified = doctor?.subscriptionStatus === 'Active';
 
   if (isDoctorLoading) {
-    return (
-        <div className="bg-background">
-            <div className="container mx-auto px-4 pt-8 animate-pulse">
-                <div className="flex flex-col md:flex-row items-center gap-6 md:gap-8">
-                    <Skeleton className="w-32 h-32 md:w-40 md:h-40 rounded-full" />
-                    <div className="flex flex-col items-center md:items-start">
-                        <Skeleton className="h-8 w-48 rounded-md mb-2" />
-                        <Skeleton className="h-5 w-32 rounded-md" />
-                        <Skeleton className="h-6 w-24 mt-2 rounded-full" />
-                    </div>
-                </div>
-            </div>
-            <div className="container mx-auto px-4 pb-16 animate-pulse">
-                 <div className="grid grid-cols-2 gap-4 md:grid-cols-4 mt-8">
-                    <Skeleton className="h-24 w-full rounded-lg" />
-                    <Skeleton className="h-24 w-full rounded-lg" />
-                    <Skeleton className="h-24 w-full rounded-lg" />
-                    <Skeleton className="h-24 w-full rounded-lg" />
-                 </div>
-                 <div className="my-6 space-y-4">
-                    <Skeleton className="h-6 w-32 rounded-md" />
-                    <Skeleton className="h-20 w-full rounded-lg" />
-                 </div>
-                 <Skeleton className="h-96 w-full rounded-lg" />
-            </div>
-        </div>
-    );
+    return <div className="container mx-auto px-4 py-12"><Skeleton className="h-screen w-full" /></div>;
   }
 
   if (!doctor) {
@@ -388,27 +341,34 @@ export default function DoctorProfilePage() {
 
   return (
     <div className="bg-background pb-24">
-        <div className="container mx-auto px-4 pt-8">
-            <div className="flex flex-col md:flex-row items-center gap-6 md:gap-8">
-                <Avatar className="w-32 h-32 md:w-40 md:h-40 border-4 border-background shadow-lg text-4xl">
-                    <AvatarImage src={doctor.image} alt={`Foto de ${doctor.name}`} />
-                    <AvatarFallback>{nameInitials}</AvatarFallback>
-                </Avatar>
-                <div className="flex flex-col items-center md:items-start text-center md:text-left">
-                    <h1 className="font-headline text-3xl font-bold">{doctor.name}</h1>
-                    <p className="text-lg font-medium text-muted-foreground">{doctor.specialty}</p>
-                    {doctor.rating > 0 && (
-                        <div className="mt-2 inline-flex items-center gap-2 rounded-full bg-primary/10 px-3 py-1 text-sm font-semibold text-primary">
-                            <Star className="h-4 w-4 text-yellow-400" fill="currentColor" />
-                            <span>{doctor.rating} ({doctor.reviews} {doctor.reviews === 1 ? 'reseña' : 'reseñas'})</span>
-                        </div>
-                    )}
-                </div>
+      <div className="container mx-auto px-4 pt-8">
+        <header className="flex flex-col md:flex-row items-center gap-6 md:gap-8">
+          <Avatar className="w-32 h-32 md:w-40 md:h-40 border-4 border-background shadow-lg text-4xl">
+              <AvatarImage src={doctor.image} alt={`Foto de ${doctor.name}`} />
+              <AvatarFallback>{nameInitials}</AvatarFallback>
+          </Avatar>
+          <div className="flex flex-col items-center md:items-start text-center md:text-left space-y-2">
+            <div className="flex items-center gap-3">
+                <h1 className="font-headline text-3xl font-bold">{doctor.name}</h1>
+                {isVerified && 
+                    <div className="flex items-center gap-1 text-blue-500 font-semibold">
+                        <ShieldCheck className="h-6 w-6" />
+                        <span>Verificado</span>
+                    </div>
+                }
             </div>
-        </div>
+            <p className="text-lg font-medium text-muted-foreground">{doctor.specialty}</p>
+            {doctor.rating > 0 && (
+                <div className="mt-1 inline-flex items-center gap-2 rounded-full bg-primary/10 px-3 py-1 text-sm font-semibold text-primary">
+                    <Star className="h-4 w-4 text-yellow-400" fill="currentColor" />
+                    <span>{doctor.rating} ({doctor.reviews} {doctor.reviews === 1 ? 'reseña' : 'reseñas'})</span>
+                </div>
+            )}
+          </div>
+        </header>
 
-        <div className="container mx-auto px-4 mt-8">
-            <div className="grid grid-cols-1 gap-x-8 gap-y-10 lg:grid-cols-3">
+        <main className="mt-12">
+            <div className="grid grid-cols-1 gap-x-8 gap-y-12 lg:grid-cols-3">
                 <div className="lg:col-span-2">
                     <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-center">
                         <DoctorStatCard icon={BriefcaseMedical} label="Experiencia" value={`${doctor.experienceYears}+ Años`} />
@@ -423,13 +383,13 @@ export default function DoctorProfilePage() {
                             <CardContent className="p-6"><p className="text-muted-foreground whitespace-pre-wrap">{doctor.bio}</p></CardContent>
                         </Card>
                     )}
-                    <div className="my-6"><CommentsFeed doctorId={doctor.id} doctorName={doctor.name} /></div>
+                    <CommentsFeed doctorId={doctor.id} doctorName={doctor.name} />
                 </div>
-                <div className="lg:col-span-1 lg:sticky top-24 self-start space-y-6">
+                <aside className="lg:col-span-1 lg:sticky top-24 self-start space-y-6">
                     {(doctor.location && doctor.location !== 'Ubicación no especificada') && (
-                        <div>
-                            <h2 className="font-headline text-xl font-bold">Ubicación</h2>
-                            <div className="mt-2 rounded-lg border bg-card p-4">
+                        <Card>
+                            <CardHeader><CardTitle className="text-lg font-headline">Ubicación</CardTitle></CardHeader>
+                            <CardContent>
                                 <p className="font-semibold">{doctor.location}</p>
                                 {doctor.city && doctor.city !== 'Ciudad no especificada' && <p className="text-sm text-muted-foreground">{doctor.city}, Venezuela</p>}
                                 {doctor.googleMapsUrl && (
@@ -437,13 +397,14 @@ export default function DoctorProfilePage() {
                                         <MapPin className="h-4 w-4" /> Ver en Google Maps
                                     </a>
                                 )}
-                            </div>
-                        </div>
+                            </CardContent>
+                        </Card>
                     )}
                     <AppointmentScheduler doctor={doctor} />
-                </div>
+                </aside>
             </div>
-        </div>
+        </main>
+      </div>
     </div>
   );
 }

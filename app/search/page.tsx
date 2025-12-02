@@ -12,31 +12,26 @@ import {
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Search as SearchIcon, ChevronLeft } from "lucide-react";
-import { useCollection, useFirestore, useMemoFirebase } from '@/firebase';
-import { collection, query, where, getDocs } from 'firebase/firestore';
+import { useFirestore } from '@/firebase';
+import { collection, query, where, getDocs, QuerySnapshot, DocumentData } from 'firebase/firestore';
 import type { Doctor, Rating } from '@/lib/types';
 import { useState, useMemo, useEffect } from 'react';
 import { Skeleton } from '@/components/ui/skeleton';
 
-// This component maps Firestore data to the DoctorCard component props
-const DoctorProfileAdapter = ({ profile, ratingData }: { profile: Partial<Doctor>, ratingData: { average: number, count: number } }) => {
+// The adapter now correctly maps all fields from the fetched data to the Doctor type,
+// ensuring data consistency for the DoctorCard.
+const DoctorProfileAdapter = ({ profile, ratingData }: { profile: Doctor, ratingData: { average: number, count: number } }) => {
   const doctorData: Doctor = {
-    id: profile.id!,
-    slug: profile.id!,
-    name: profile.name || 'Doctor',
-    specialty: profile.specialty || 'N/A',
-    experienceYears: profile.experienceYears || 0,
-    location: profile.location || 'Ubicación no disponible',
-    city: 'Caracas', // Placeholder, needs to be in profile
+    ...profile, // Spread all properties from the fetched profile
     rating: ratingData.average || 0,
     reviews: ratingData.count || 0,
-    bio: profile.bio || '',
-    isFeatured: true, // Placeholder
-    image: profile.profilePictureUrl || "",
-    availability: profile.availability || {},
-    insurances: [], // Placeholder
-    googleMapsUrl: profile.googleMapsUrl || '',
-    cost: profile.cost || 0,
+    // Ensure essential fields have fallbacks, although the query should prevent this.
+    uid: profile.uid,
+    id: profile.id,
+    slug: profile.id,
+    name: profile.name || 'Doctor Sin Nombre',
+    specialty: profile.specialty || 'Sin Especialidad',
+    image: profile.image || "", // Use the correct 'image' field from the Doctor type
   };
   return <DoctorCard doctor={doctorData} />;
 };
@@ -47,25 +42,47 @@ export default function SearchPage() {
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedCity, setSelectedCity] = useState('all');
   
-  const doctorProfilesQuery = useMemoFirebase(() => {
-    if (!firestore) return null;
-    return query(
-        collection(firestore, 'doctor_profiles'),
-        where('subscriptionStatus', 'in', ['Active', 'Trial'])
-      );
-  }, [firestore]);
-  
-  const { data: doctorProfiles, isLoading: areDoctorsLoading } = useCollection<Doctor>(doctorProfilesQuery);
+  // State to hold the fetched data
+  const [doctorProfiles, setDoctorProfiles] = useState<Doctor[]>([]);
+  const [allRatings, setAllRatings] = useState<Rating[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
 
-  const allRatingsQuery = useMemoFirebase(() => {
-    if (!firestore) return null;
-    return collection(firestore, 'ratings');
+  useEffect(() => {
+    if (!firestore) return;
+
+    const fetchData = async () => {
+      setIsLoading(true);
+      try {
+        // **CRITICAL FIX**: Fetch directly from server, bypassing local cache.
+        // We now fetch doctors and ratings, ensuring data is always fresh.
+        const doctorProfilesQuery = query(
+          collection(firestore, 'doctor_profiles'),
+          where('subscriptionStatus', 'in', ['Active_Paid', 'Free_Trial'])
+        );
+        
+        const doctorSnapshot = await getDocs(doctorProfilesQuery);
+        const fetchedDoctors = doctorSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })) as Doctor[];
+        setDoctorProfiles(fetchedDoctors);
+
+        const ratingsQuery = collection(firestore, 'ratings');
+        const ratingSnapshot = await getDocs(ratingsQuery);
+        const fetchedRatings = ratingSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })) as Rating[];
+        setAllRatings(fetchedRatings);
+
+      } catch (error) {
+        console.error("Error fetching doctor profiles or ratings:", error);
+        // Optionally, set an error state to show a message to the user
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    fetchData();
   }, [firestore]);
-  
-  const { data: allRatings, isLoading: areRatingsLoading } = useCollection<Rating>(allRatingsQuery);
+
 
   const doctorsWithRatings = useMemo(() => {
-    if (!doctorProfiles || !allRatings) return null;
+    if (isLoading || doctorProfiles.length === 0) return [];
 
     const ratingsMap = new Map<string, { total: number; count: number }>();
     allRatings.forEach(rating => {
@@ -78,12 +95,12 @@ export default function SearchPage() {
     return doctorProfiles.map(profile => {
       const ratingInfo = ratingsMap.get(profile.id);
       const ratingData = ratingInfo 
-        ? { average: ratingInfo.total / ratingInfo.count, count: ratingInfo.count }
+        ? { average: parseFloat((ratingInfo.total / ratingInfo.count).toFixed(1)), count: ratingInfo.count }
         : { average: 0, count: 0 };
       return { ...profile, ratingData };
     });
 
-  }, [doctorProfiles, allRatings]);
+  }, [doctorProfiles, allRatings, isLoading]);
 
   const filteredDoctors = useMemo(() => {
     if (!doctorsWithRatings) return [];
@@ -96,9 +113,13 @@ export default function SearchPage() {
   }, [searchTerm, selectedCity, doctorsWithRatings]);
 
 
-  const allCities = ['Caracas', 'Maracaibo', 'Valencia', 'Barquisimeto', 'Maracay']; // Placeholder
+  const allCities = useMemo(() => {
+      if (!doctorProfiles) return [];
+      // Create a unique list of cities from the profiles
+      const cities = new Set(doctorProfiles.map(doc => doc.city).filter(Boolean));
+      return Array.from(cities);
+  }, [doctorProfiles]);
 
-  const isLoading = areDoctorsLoading || areRatingsLoading;
 
   return (
     <div className="bg-background">
@@ -135,7 +156,8 @@ export default function SearchPage() {
               </Select>
             </div>
             <div className="flex items-end">
-              <Button className="w-full">
+               {/* The search is now performed automatically on filter change */}
+              <Button className="w-full" disabled>
                 <SearchIcon className="mr-2 h-4 w-4" />
                 Buscar
               </Button>
@@ -163,23 +185,24 @@ export default function SearchPage() {
             </p>
           )}
 
-
           <div className="mt-8 grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
             {isLoading && Array.from({ length: 8 }).map((_, i) => (
-              <div key={i} className="flex flex-col gap-2">
-                <div className="aspect-[4/3] w-full animate-pulse rounded-t-lg bg-muted"></div>
-                <div className="p-4">
-                  <Skeleton className="h-5 w-3/4 animate-pulse rounded bg-muted" />
-                  <Skeleton className="mt-2 h-4 w-1/2 animate-pulse rounded bg-muted" />
-                </div>
+                <div key={i} className="rounded-lg border bg-card overflow-hidden">
+                    <Skeleton className="aspect-[4/3] w-full" />
+                    <div className="p-4">
+                        <Skeleton className="h-5 w-3/4 rounded" />
+                        <Skeleton className="mt-2 h-4 w-1/2 rounded" />
+                        <Skeleton className="mt-4 h-4 w-1/4 rounded" />
+                    </div>
               </div>
             ))}
-            {!isLoading && filteredDoctors?.map((profile) => (
+            {!isLoading && filteredDoctors.map((profile) => (
               <DoctorProfileAdapter key={profile.id} profile={profile} ratingData={profile.ratingData} />
             ))}
-             {!isLoading && filteredDoctors?.length === 0 && (
+             {!isLoading && filteredDoctors.length === 0 && (
               <div className="col-span-full text-center py-16">
-                <p className="text-muted-foreground">No se encontraron doctores que coincidan con tu búsqueda.</p>
+                <h3 className="text-xl font-semibold">No se encontraron resultados</h3>
+                <p className="text-muted-foreground mt-2">Intenta ajustar tus filtros de búsqueda.</p>
               </div>
             )}
           </div>
