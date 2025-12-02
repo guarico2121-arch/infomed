@@ -1,0 +1,23 @@
+rules_version = '2';
+
+service firebase.storage {
+  match /b/{bucket}/o {
+    // Default: Allow public read access for all files.
+    // This is useful for profile pictures, banners, and other public assets.
+    match /{allPaths=**} {
+      allow read: if true;
+    }
+
+    // Allow users to write to their own private folder.
+    // e.g., users/USER_ID/profile_picture.jpg
+    match /users/{userId}/{allPaths=**} {
+      allow write: if request.auth != null && request.auth.uid == userId;
+    }
+
+    // Allow admins or specific roles to write to the banners folder.
+    // For now, we'll allow any authenticated user. This can be locked down further.
+    match /banners/{allPaths=**} {
+      allow write: if request.auth != null;
+    }
+  }
+}

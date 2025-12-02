@@ -1,0 +1,499 @@
+
+{
+  "entities": {
+    "User": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "title": "User",
+      "type": "object",
+      "description": "Represents a user of the InfoMed platform. This could be a patient, doctor, or clinic administrator.",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Unique identifier for the user."
+        },
+        "firstName": {
+          "type": "string",
+          "description": "The user's first name."
+        },
+        "lastName": {
+          "type": "string",
+          "description": "The user's last name."
+        },
+        "name": {
+          "type": "string",
+          "description": "The user's full name."
+        },
+        "email": {
+          "type": "string",
+          "description": "The user's email address.",
+          "format": "email"
+        },
+        "phone": {
+          "type": "string",
+          "description": "The user's phone number."
+        },
+        "roles": {
+          "type": "array",
+          "description": "Roles associated with the user (e.g., PATIENT, DOCTOR, CLINIC_ADMIN).",
+          "items": {
+            "type": "string"
+          }
+        },
+        "country": {
+          "type": "string",
+          "description": "The user's country."
+        },
+        "language": {
+          "type": "string",
+          "description": "The user's preferred language."
+        },
+        "currency": {
+          "type": "string",
+          "description": "The user's preferred currency."
+        }
+      },
+      "required": [
+        "id",
+        "firstName",
+        "lastName",
+        "name",
+        "email",
+        "roles",
+        "country",
+        "language",
+        "currency"
+      ]
+    },
+    "DoctorProfile": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "title": "DoctorProfile",
+      "type": "object",
+      "description": "Represents a doctor's profile information.",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Unique identifier for the doctor profile, same as user ID."
+        },
+        "userId": {
+          "type": "string",
+          "description": "Reference to User. (Relationship: User 1:1 DoctorProfile)"
+        },
+        "name": {
+          "type": "string",
+          "description": "The doctor's full name."
+        },
+        "email": {
+            "type": "string",
+            "description": "Denormalized email for admin panel visibility.",
+            "format": "email"
+        },
+        "specialty": {
+          "type": "string",
+          "description": "The doctor's medical specialty."
+        },
+        "experienceYears": {
+          "type": "number",
+          "description": "The doctor's years of professional experience."
+        },
+        "healthRegistryNumber": {
+          "type": "string",
+          "description": "The doctor's health registry number (Número de Sanidad)."
+        },
+        "medicalFederationNumber": {
+          "type": "string",
+          "description": "The doctor's medical federation number (Número de Colegiado)."
+        },
+        "biography": {
+          "type": "string",
+          "description": "A short biography of the doctor."
+        },
+        "address": {
+          "type": "string",
+          "description": "The doctor's office address."
+        },
+        "googleMapsUrl": {
+          "type": "string",
+          "description": "A shareable Google Maps URL for the doctor's office location."
+        },
+        "contactPhone": {
+          "type": "string",
+          "description": "Optional contact phone for the office."
+        },
+        "profilePictureUrl": {
+          "type": "string",
+          "description": "URL for the doctor's profile picture."
+        },
+        "cost": {
+          "type": "number",
+          "description": "The cost of a consultation in USD."
+        },
+        "subscriptionStatus": {
+            "type": "string",
+            "description": "The status of the doctor's subscription (e.g., Active, Trial, Expired, Suspended)."
+        }
+      },
+      "required": [
+        "id",
+        "userId",
+        "name",
+        "email",
+        "specialty",
+        "experienceYears",
+        "healthRegistryNumber",
+        "medicalFederationNumber",
+        "subscriptionStatus"
+      ]
+    },
+    "ClinicProfile": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "title": "ClinicProfile",
+      "type": "object",
+      "description": "Represents a clinic's profile information.",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Unique identifier for the clinic profile."
+        },
+        "userId": {
+          "type": "string",
+          "description": "Reference to User. (Relationship: User 1:1 ClinicProfile)"
+        },
+        "name": {
+          "type": "string",
+          "description": "The name of the clinic."
+        },
+        "address": {
+          "type": "string",
+          "description": "The clinic's address."
+        },
+        "geoLocation": {
+          "type": "string",
+          "description": "The clinic's geo location (latitude, longitude)."
+        },
+        "doctors": {
+          "type": "array",
+          "description": "References to Doctor profiles. (Relationship: Clinic 1:N Doctor)",
+          "items": {
+            "type": "string"
+          }
+        }
+      },
+      "required": [
+        "id",
+        "userId",
+        "name",
+        "address"
+      ]
+    },
+    "Subscription": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "title": "Subscription",
+      "type": "object",
+      "description": "Represents a subscription for a doctor or clinic.",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Unique identifier for the subscription."
+        },
+        "userId": {
+          "type": "string",
+          "description": "Reference to User (Doctor or Clinic). (Relationship: User 1:1 Subscription)"
+        },
+        "startDate": {
+          "type": "string",
+          "description": "The start date of the subscription.",
+          "format": "date-time"
+        },
+        "endDate": {
+          "type": "string",
+          "description": "The end date of the subscription.",
+          "format": "date-time"
+        },
+        "status": {
+          "type": "string",
+          "description": "The status of the subscription (e.g., Active, Trial, PendingPayment, Expired, Suspended)."
+        },
+        "planType": {
+          "type": "string",
+          "description": "Subscription plan type (e.g., Monthly, Annual)."
+        }
+      },
+      "required": [
+        "id",
+        "userId",
+        "startDate",
+        "endDate",
+        "status",
+        "planType"
+      ]
+    },
+    "Appointment": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "title": "Appointment",
+      "type": "object",
+      "description": "Represents an appointment between a patient and a doctor.",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Unique identifier for the appointment."
+        },
+        "doctorId": {
+          "type": "string",
+          "description": "Reference to DoctorProfile. (Relationship: DoctorProfile 1:N Appointment)"
+        },
+        "patientId": {
+          "type": "string",
+          "description": "Reference to User (Patient). (Relationship: User 1:N Appointment)"
+        },
+        "startTime": {
+          "type": "string",
+          "description": "The start time of the appointment.",
+          "format": "date-time"
+        },
+        "endTime": {
+          "type": "string",
+          "description": "The end time of the appointment.",
+          "format": "date-time"
+        },
+        "status": {
+          "type": "string",
+          "description": "The status of the appointment (e.g., Confirmed, Cancelled, Completed)."
+        },
+        "cost": {
+          "type": "number",
+          "description": "The cost of the appointment."
+        }
+      },
+      "required": [
+        "id",
+        "doctorId",
+        "patientId",
+        "startTime",
+        "endTime",
+        "status"
+      ]
+    },
+    "Rating": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "title": "Rating",
+      "type": "object",
+      "description": "Represents a rating given by a patient to a doctor after an appointment.",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Unique identifier for the rating."
+        },
+        "doctorId": {
+          "type": "string",
+          "description": "Reference to DoctorProfile. (Relationship: DoctorProfile 1:N Rating)"
+        },
+        "patientId": {
+          "type": "string",
+          "description": "Reference to User (Patient). (Relationship: User 1:N Rating)"
+        },
+        "appointmentId": {
+          "type": "string",
+          "description": "Reference to Appointment. (Relationship: Appointment 1:1 Rating)"
+        },
+        "rating": {
+          "type": "number",
+          "description": "The rating given by the patient (1-5 stars)."
+        },
+        "comment": {
+          "type": "string",
+          "description": "Optional comment associated with the rating."
+        }
+      },
+      "required": [
+        "id",
+        "doctorId",
+        "patientId",
+        "appointmentId",
+        "rating"
+      ]
+    },
+    "Banner": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "title": "Banner",
+      "type": "object",
+      "description": "Represents a promotional banner for the homepage carousel.",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Unique identifier for the banner."
+        },
+        "title": {
+          "type": "string",
+          "description": "The main headline of the banner."
+        },
+        "subtitle": {
+          "type": "string",
+          "description": "The subtext or secondary message of the banner."
+        },
+        "imageUrl": {
+          "type": "string",
+          "description": "The URL of the banner image hosted on Firebase Storage."
+        },
+        "isActive": {
+          "type": "boolean",
+          "description": "Controls whether the banner is currently visible on the homepage."
+        },
+        "createdAt": {
+          "type": "string",
+          "description": "The timestamp when the banner was created, for sorting.",
+          "format": "date-time"
+        }
+      },
+      "required": [
+        "id",
+        "title",
+        "imageUrl",
+        "isActive",
+        "createdAt"
+      ]
+    }
+  },
+  "auth": {
+    "providers": [
+      "password",
+      "anonymous"
+    ]
+  },
+  "firestore": {
+    "structure": [
+      {
+        "path": "/users/{userId}",
+        "definition": {
+          "entityName": "User",
+          "schema": {
+            "$ref": "#/backend/entities/User"
+          },
+          "description": "Stores user profile information. User can only read/write their own document.",
+          "params": [
+            {
+              "name": "userId",
+              "description": "The unique identifier of the user."
+            }
+          ]
+        }
+      },
+      {
+        "path": "/doctor_profiles/{doctorProfileId}",
+        "definition": {
+          "entityName": "DoctorProfile",
+          "schema": {
+            "$ref": "#/backend/entities/DoctorProfile"
+          },
+          "description": "Stores doctor profile information. Includes 'userId' to link to the associated user. Doctor can only read/write their own profile.",
+          "params": [
+            {
+              "name": "doctorProfileId",
+              "description": "The unique identifier of the doctor profile."
+            }
+          ]
+        }
+      },
+      {
+        "path": "/clinic_profiles/{clinicProfileId}",
+        "definition": {
+          "entityName": "ClinicProfile",
+          "schema": {
+            "$ref": "#/backend/entities/ClinicProfile"
+          },
+          "description": "Stores clinic profile information. Includes 'userId' to link to the associated user. Clinic can only read/write their own profile.",
+          "params": [
+            {
+              "name": "clinicProfileId",
+              "description": "The unique identifier of the clinic profile."
+            }
+          ]
+        }
+      },
+      {
+        "path": "/users/{userId}/subscriptions/{subscriptionId}",
+        "definition": {
+          "entityName": "Subscription",
+          "schema": {
+            "$ref": "#/backend/entities/Subscription"
+          },
+          "description": "Stores subscription information for doctors and clinics. Located under the user's document to ensure ownership. User can only read/write their own subscription.",
+          "params": [
+            {
+              "name": "userId",
+              "description": "The unique identifier of the user (doctor or clinic)."
+            },
+            {
+              "name": "subscriptionId",
+              "description": "The unique identifier of the subscription."
+            }
+          ]
+        }
+      },
+      {
+        "path": "/appointments/{appointmentId}",
+        "definition": {
+          "entityName": "Appointment",
+          "schema": {
+            "$ref": "#/backend/entities/Appointment"
+          },
+          "description": "Stores appointment information. Doctors and patients can read appointments they are involved in. Includes 'doctorId' and 'patientId' for easy querying.",
+          "params": [
+            {
+              "name": "appointmentId",
+              "description": "The unique identifier of the appointment."
+            }
+          ]
+        }
+      },
+      {
+        "path": "/ratings/{ratingId}",
+        "definition": {
+          "entityName": "Rating",
+          "schema": {
+            "$ref": "#/backend/entities/Rating"
+          },
+          "description": "Stores ratings given by patients to doctors. Includes 'doctorId' and 'patientId' for querying and validation.",
+          "params": [
+            {
+              "name": "ratingId",
+              "description": "The unique identifier of the rating."
+            }
+          ]
+        }
+      },
+      {
+        "path": "/roles_admin/{userId}",
+        "definition": {
+          "entityName": "roles_admin",
+          "schema": {
+            "$ref": "#/backend/entities/User"
+          },
+          "description": "Collection for storing admin roles. The existence of a document indicates admin status.",
+          "params": [
+            {
+              "name": "userId",
+              "description": "The unique identifier of the admin user."
+            }
+          ]
+        }
+      },
+      {
+        "path": "/banners/{bannerId}",
+        "definition": {
+          "entityName": "Banner",
+          "schema": {
+            "$ref": "#/backend/entities/Banner"
+          },
+          "description": "Stores promotional banners for the homepage. Publicly readable, but only writable by admins.",
+          "params": [
+            {
+              "name": "bannerId",
+              "description": "The unique identifier of the banner."
+            }
+          ]
+        }
+      }
+    ],
+    "reasoning": "This Firestore structure prioritizes authorization independence, clarity, and scalability for the InfoMed application. It addresses the need for a robust and easily debuggable system while adhering to the specified design principles, including DBAC, QAPs, and invariants.\n\n**Authorization Independence (CRITICAL):** The design avoids hierarchical authorization dependencies (`get()`) by denormalizing relevant authorization data into subcollections when necessary. For instance, if access to appointments needs to be restricted based on doctor or clinic membership, the membership information (or relevant roles) will be copied into the appointment documents.\n\n**Structural Segregation:**  Data with different access requirements are stored in separate collections. For example, user profiles are kept separate from doctor profiles, subscriptions, and appointments.\n\n**Access Modeling:**  The design employs consistent patterns for authorization:\n*   **Path-Based Ownership:** User-owned data (like doctor profiles and subscriptions) are stored under `/users/{userId}`, ensuring that only the user can access them.\n*   **Membership Maps:** For collaborative resources (if needed in future), a `members` map will be used to define roles and permissions.\n*   **Global Roles (DBAC):** Admin roles are handled using a dedicated collection (`/roles_admin/{uid}`), relying on the existence of documents rather than their content.\n\n**QAPs (Rules are not Filters):**  The structure allows for secure `list` operations. Since authorization information is denormalized and access needs are segregated, rules can be written to allow listing documents based on ownership or membership without requiring filtering of sensitive data on the client-side.\n\n**Invariants:**  The structure facilitates the enforcement of invariants like ownership, timestamps, and denormalized data consistency through Firestore's security rules and server-side functions (if needed).\n\n**Example of Authorization Independence:**\nConsider appointments. To determine if a user (patient) can view an appointment, the structure avoids needing to `get()` the doctor's profile to check their subscription status. Instead, the appointment document will contain denormalized data indicating the doctor's subscription status (e.g., `doctorSubscriptionStatus: 'Active'`). The security rule can then directly check this field in the appointment document without relying on external `get()` calls. For patients creating appointments under a doctor's profile, the doctor's ID is present on the new appointment, and thus security rules can securely confirm the user is a patient, that the appointment exists under a valid doctorId, and that a doctor's subscription is active.\n\nThis approach ensures atomic operations, simplifies debugging, and enhances security by making authorization intent explicit."
+  }
+}
