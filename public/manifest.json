@@ -1,0 +1,21 @@
+{
+  "name": "InfoMed - Conectando Salud",
+  "short_name": "InfoMed",
+  "description": "Plataforma para conectar doctores y pacientes, agendar citas y mejorar la comunicación en salud.",
+  "icons": [
+    {
+      "src": "/logo.png",
+      "sizes": "192x192",
+      "type": "image/png"
+    },
+    {
+      "src": "/logo.png",
+      "sizes": "512x512",
+      "type": "image/png"
+    }
+  ],
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#ffffff",
+  "theme_color": "#007bff"
+}
