@@ -3,7 +3,7 @@
 import { useState } from 'react';
 import { useAuth, useFirestore } from '@/firebase';
 import { createUserWithEmailAndPassword, updateProfile } from 'firebase/auth';
-import { doc, setDoc } from 'firebase/firestore';
+import { doc, setDoc, Timestamp } from 'firebase/firestore';
 import { useRouter } from 'next/navigation';
 import { Button } from '@/components/ui/button';
 import {
@@ -32,7 +32,7 @@ export default function RegisterPage() {
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
-  const [role, setRole] = useState<'PATIENT' | 'DOCTOR'>('PATIENT');
+  const [role, setRole] = useState<'Patient' | 'Doctor'>('Patient');
   const [healthRegistryNumber, setHealthRegistryNumber] = useState('');
   const [medicalFederationNumber, setMedicalFederationNumber] = useState('');
   
@@ -64,38 +64,44 @@ export default function RegisterPage() {
       const fullName = `${firstName} ${lastName}`.trim();
       await updateProfile(user, { displayName: fullName });
 
+      // **CRITICAL FIX**: The `roles` field was missing. It is now correctly
+      // added as an array, fulfilling the requirement for the user profile page.
       const userDocRef = doc(firestore, 'users', user.uid);
       const userData = {
-        id: user.uid,
+        uid: user.uid,
         name: fullName,
-        firstName,
-        lastName,
         email: user.email,
-        role: role,
-        country: 'Venezuela',
-        language: 'es',
-        currency: 'USD',
+        photoURL: null,
+        roles: [role],
+        createdAt: Timestamp.now(),
       };
       await setDoc(userDocRef, userData);
 
-      if (role === 'DOCTOR') {
+      // If the user is a doctor, create their public-facing professional profile.
+      if (role === 'Doctor') {
         const doctorProfileRef = doc(firestore, 'doctor_profiles', user.uid);
         const doctorProfileData = {
-          id: user.uid,
-          userId: user.uid,
-          name: fullName,
-          email: user.email,
-          specialty: '',
-          experienceYears: 0,
-          healthRegistryNumber: healthRegistryNumber.trim(),
-          medicalFederationNumber: medicalFederationNumber.trim(),
-          biography: '',
-          address: '',
-          googleMapsUrl: '',
-          contactPhone: '',
-          profilePictureUrl: '',
-          cost: 0,
-          subscriptionStatus: 'Trial',
+            uid: user.uid,
+            id: user.uid,
+            slug: user.uid,
+            name: fullName,
+            email: user.email,
+            specialty: 'Medicina General', // Default value
+            experienceYears: 1,
+            city: 'Caracas', // Default value
+            location: '',
+            subscriptionStatus: 'Trial', // All new doctors start with a trial
+            createdAt: Timestamp.now(),
+            image: '', 
+            bio: '', 
+            rating: 0,
+            reviews: 0,
+            isFeatured: false,
+            availability: {}, 
+            insurances: [],
+            googleMapsUrl: '', 
+            cost: 20, // Default value
+            posts: [],
         };
         await setDoc(doctorProfileRef, doctorProfileData);
       }
@@ -128,21 +134,21 @@ export default function RegisterPage() {
           <CardContent className="grid gap-4">
              <div className="grid gap-2">
                 <Label>¿Qué tipo de cuenta necesitas?</Label>
-                <RadioGroup defaultValue="PATIENT" onValueChange={(value: 'PATIENT' | 'DOCTOR') => setRole(value)} className="grid grid-cols-2 gap-4">
-                    <Label htmlFor="role-patient" className={cn("flex flex-col items-center justify-center rounded-md border-2 border-muted bg-popover p-4 hover:bg-accent hover:text-accent-foreground cursor-pointer", role === 'PATIENT' && "border-primary")}>
+                <RadioGroup defaultValue="Patient" onValueChange={(value: 'Patient' | 'Doctor') => setRole(value)} className="grid grid-cols-2 gap-4">
+                    <Label htmlFor="role-patient" className={cn("flex flex-col items-center justify-center rounded-md border-2 border-muted bg-popover p-4 hover:bg-accent hover:text-accent-foreground cursor-pointer", role === 'Patient' && "border-primary")}>
                          <User className="mb-3 h-6 w-6" />
                          Soy Paciente
-                         <RadioGroupItem value="PATIENT" id="role-patient" className="sr-only" />
+                         <RadioGroupItem value="Patient" id="role-patient" className="sr-only" />
                     </Label>
-                     <Label htmlFor="role-doctor" className={cn("flex flex-col items-center justify-center rounded-md border-2 border-muted bg-popover p-4 hover:bg-accent hover:text-accent-foreground cursor-pointer", role === 'DOCTOR' && "border-primary")}>
+                     <Label htmlFor="role-doctor" className={cn("flex flex-col items-center justify-center rounded-md border-2 border-muted bg-popover p-4 hover:bg-accent hover:text-accent-foreground cursor-pointer", role === 'Doctor' && "border-primary")}>
                          <BriefcaseMedical className="mb-3 h-6 w-6" />
                          Soy Profesional
-                         <RadioGroupItem value="DOCTOR" id="role-doctor" className="sr-only" />
+                         <RadioGroupItem value="Doctor" id="role-doctor" className="sr-only" />
                     </Label>
                 </RadioGroup>
             </div>
 
-            {role === 'DOCTOR' && (
+            {role === 'Doctor' && (
                 <div className="grid grid-cols-1 gap-4 rounded-lg border bg-muted/30 p-4 md:grid-cols-2">
                      <div className="grid gap-2 md:col-span-2"><p className='text-sm font-medium text-foreground'>Credenciales Profesionales</p></div>
                     <div className="grid gap-2">
