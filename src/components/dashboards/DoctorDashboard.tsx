@@ -1,114 +1,105 @@
 'use client';
 
 import { useUser, useFirestore } from '@/firebase';
-import { doc, getDoc, setDoc, serverTimestamp, Timestamp } from 'firebase/firestore';
+import { doc, getDoc, setDoc, serverTimestamp, Timestamp, onSnapshot, DocumentSnapshot } from 'firebase/firestore';
 import { useEffect, useState } from 'react';
 import type { Doctor } from '@/lib/types';
 import DoctorProfileForm from '../forms/DoctorProfileForm';
-import SubscriptionStatusBanner from '../ui/SubscriptionStatusBanner'; // VIENE DE: Subscription Logic
+import SubscriptionStatusBanner from '../ui/SubscriptionStatusBanner';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { useToast } from '@/hooks/use-toast';
 
-// A simple loading spinner component
 const LoadingSpinner = () => (
     <div className="flex justify-center items-center h-screen">
-        <div className="animate-spin rounded-full h-32 w-32 border-t-2 border-b-2 border-blue-500"></div>
-    </div>
-);
-
-// --- Reusable smaller components for displaying profile data ---
-const DoctorProfileHeader = ({ doctor }: { doctor: Doctor }) => (
-    <div className="bg-white shadow rounded-lg p-6 mb-6">
-        <h2 className="text-xl font-bold">{doctor.name}</h2>
-        <p className="text-gray-600">{doctor.specialty || 'Especialidad no especificada'}</p>
+        <div className="animate-spin rounded-full h-32 w-32 border-t-2 border-b-2 border-primary"></div>
     </div>
 );
 
 const DoctorStatsCards = ({ doctor }: { doctor: Doctor }) => (
      <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
-        <div className="bg-white shadow rounded-lg p-4">
-            <h3 className="text-gray-500 text-sm">Tarifa por Consulta</h3>
-            <p className="text-2xl font-bold">${doctor.cost || 'N/A'}</p>
-        </div>
-        <div className="bg-white shadow rounded-lg p-4">
-            <h3 className="text-gray-500 text-sm">Años de Experiencia</h3>
-            <p className="text-2xl font-bold">{doctor.experienceYears || 'N/A'}</p>
-        </div>
-        <div className="bg-white shadow rounded-lg p-4">
-            <h3 className="text-gray-500 text-sm">Ubicación</h3>
-            <p className="text-2xl font-bold">{doctor.city || 'N/A'}</p>
-        </div>
+        <Card>
+            <CardHeader><CardTitle className="text-sm text-muted-foreground font-normal">Tarifa por Consulta</CardTitle></CardHeader>
+            <CardContent><p className="text-2xl font-bold">${doctor.cost || 0}</p></CardContent>
+        </Card>
+        <Card>
+            <CardHeader><CardTitle className="text-sm text-muted-foreground font-normal">Años de Experiencia</CardTitle></CardHeader>
+            <CardContent><p className="text-2xl font-bold">{doctor.experienceYears || 0}</p></CardContent>
+        </Card>
+        <Card>
+            <CardHeader><CardTitle className="text-sm text-muted-foreground font-normal">Ubicación</CardTitle></CardHeader>
+            <CardContent><p className="text-2xl font-bold">{doctor.city || 'N/A'}</p></CardContent>
+        </Card>
     </div>
 );
 
 const AgendaView = () => (
-    <div className="bg-white shadow rounded-lg p-6 mb-6">
-        <h3 className="text-lg font-bold mb-4">Próximas Citas</h3>
-        <p className="text-gray-500">Aquí se mostrará la agenda del médico...</p>
-    </div>
+    <Card>
+        <CardHeader><CardTitle>Próximas Citas</CardTitle></CardHeader>
+        <CardContent><p className="text-muted-foreground">Aquí se mostrará la agenda del médico...</p></CardContent>
+    </Card>
 );
 
 const PostManager = () => (
-    <div className="bg-white shadow rounded-lg p-6">
-        <h3 className="text-lg font-bold mb-4">Publicaciones Recientes</h3>
-        <p className="text-gray-500">Aquí se mostrará el gestor de posts...</p>
-    </div>
+    <Card>
+        <CardHeader><CardTitle>Publicaciones Recientes</CardTitle></CardHeader>
+        <CardContent><p className="text-muted-foreground">Aquí se mostrará el gestor de posts...</p></CardContent>
+    </Card>
 );
 
-// --- Main DoctorDashboard Component ---
 export default function DoctorDashboard() {
     const { user, isUserLoading } = useUser();
     const firestore = useFirestore();
+    const { toast } = useToast();
+    
     const [doctorProfile, setDoctorProfile] = useState<Doctor | null>(null);
-    const [profileExists, setProfileExists] = useState(false);
     const [isLoading, setIsLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
 
     useEffect(() => {
-        if (isUserLoading || !user || !firestore) {
-            return; // Wait until user and firestore are available
-        }
+        if (isUserLoading || !user || !firestore) return;
 
-        const fetchDoctorProfile = async () => {
-            const doctorDocRef = doc(firestore, 'doctor_profiles', user.uid);
-            try {
-                const docSnap = await getDoc(doctorDocRef);
-                if (docSnap.exists()) {
-                    setDoctorProfile(docSnap.data() as Doctor);
-                    setProfileExists(true);
-                } else {
-                    setProfileExists(false);
-                }
-            } catch (err) {
-                console.error("Error fetching doctor profile:", err);
-                setError('No se pudo cargar el perfil del doctor.');
+        const doctorDocRef = doc(firestore, 'doctor_profiles', user.uid);
+        const unsubscribe = onSnapshot(doctorDocRef, (docSnap: DocumentSnapshot) => {
+            if (docSnap.exists()) {
+                setDoctorProfile(docSnap.data() as Doctor);
+            } else {
+                setDoctorProfile(null); // Explicitly set to null if profile doesn't exist
             }
-            finally {
-                setIsLoading(false);
-            }
-        };
+            setIsLoading(false);
+        }, (err: Error) => {
+            console.error("Error fetching doctor profile:", err);
+            setError('No se pudo cargar el perfil del doctor.');
+            setIsLoading(false);
+        });
 
-        fetchDoctorProfile();
+        return () => unsubscribe(); // Cleanup listener
     }, [user, isUserLoading, firestore]);
 
-    const handleProfileCreation = async (profileData: Omit<Doctor, 'uid' | 'email' | 'createdAt'>) => {
-        if (!user || !firestore) return;
-        setIsLoading(true);
+    const handleProfileUpdate = async (profileData: Partial<Doctor>) => {
+        if (!user || !firestore) return false;
+        
         const doctorDocRef = doc(firestore, 'doctor_profiles', user.uid);
         try {
-            const fullProfile: Doctor = {
-                ...profileData,
-                uid: user.uid,
-                email: user.email!,
-                createdAt: serverTimestamp() as Timestamp,
-                subscriptionStatus: 'Trial', // Default status for new profiles
-            };
-            await setDoc(doctorDocRef, fullProfile);
-            setDoctorProfile(fullProfile);
-            setProfileExists(true);
+            // Use setDoc with merge: true to create or update the document.
+            await setDoc(doctorDocRef, profileData, { merge: true });
+            
+            // If it's a new profile, we need to add the core, non-editable fields.
+            if (!doctorProfile) {
+                await setDoc(doctorDocRef, {
+                    uid: user.uid,
+                    email: user.email!,
+                    createdAt: serverTimestamp(),
+                    subscriptionStatus: 'Trial',
+                }, { merge: true });
+            }
+
+            toast({ title: "Perfil Actualizado", description: "Tu información ha sido guardada con éxito." });
+            return true;
         } catch (err) {
-            console.error("Error creating profile:", err);
-            setError("No se pudo guardar el perfil. Por favor, inténtalo de nuevo.");
-        } finally {
-            setIsLoading(false);
+            console.error("Error updating profile:", err);
+            toast({ title: "Error al Guardar", description: "No se pudo guardar el perfil. Por favor, inténtalo de nuevo.", variant: 'destructive' });
+            return false;
         }
     };
 
@@ -120,34 +111,54 @@ export default function DoctorDashboard() {
         return <div className="text-red-500 text-center p-4">{error}</div>;
     }
 
-    if (!profileExists) {
-        return (
-            <div className="container mx-auto py-8">
-                <h2 className="text-2xl font-bold text-center mb-4">¡Bienvenido, Doctor!</h2>
-                <p className="text-center text-gray-600 mb-8">Para empezar, por favor completa tu perfil profesional.</p>
-                <DoctorProfileForm onSubmit={handleProfileCreation} />
-            </div>
-        );
-    }
-    
-    if (!doctorProfile) {
-        return <div className="text-center p-8">Perfil no disponible. Contacta a soporte.</div>;
-    }
-
-    // Render the full dashboard if the profile exists
     return (
-        <div className="container mx-auto py-8 bg-gray-50">
-            {/* Subscription Status Banner is now integrated */}
-            <SubscriptionStatusBanner 
-                status={doctorProfile.subscriptionStatus}
-                createdAt={doctorProfile.createdAt}
-            />
-            <DoctorProfileHeader doctor={doctorProfile} />
-            <DoctorStatsCards doctor={doctorProfile} />
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                <AgendaView />
-                <PostManager />
-            </div>
+        <div className="container mx-auto py-8 bg-muted/20 min-h-screen">
+            {doctorProfile && (
+                 <SubscriptionStatusBanner 
+                    status={doctorProfile.subscriptionStatus}
+                    createdAt={doctorProfile.createdAt}
+                />
+            )}
+            <Tabs defaultValue="dashboard" className="w-full">
+                <TabsList className="grid w-full grid-cols-2 max-w-lg mx-auto mb-6">
+                    <TabsTrigger value="dashboard">Dashboard</TabsTrigger>
+                    <TabsTrigger value="edit-profile">Editar Perfil</TabsTrigger>
+                </TabsList>
+                
+                <TabsContent value="dashboard">
+                    {doctorProfile ? (
+                        <>
+                            <DoctorStatsCards doctor={doctorProfile} />
+                            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                                <AgendaView />
+                                <PostManager />
+                            </div>
+                        </>
+                    ) : (
+                         <Card className="text-center py-12">
+                            <CardHeader>
+                                <CardTitle>¡Bienvenido, Doctor!</CardTitle>
+                                <CardDescription>Aún no tienes un perfil público. Ve a la pestaña "Editar Perfil" para empezar.</CardDescription>
+                            </CardHeader>
+                         </Card>
+                    )}
+                </TabsContent>
+                
+                <TabsContent value="edit-profile">
+                     <Card>
+                        <CardHeader>
+                            <CardTitle>Tu Perfil Público</CardTitle>
+                            <CardDescription>Esta es la información que los pacientes verán. Mantenla completa y actualizada.</CardDescription>
+                        </CardHeader>
+                        <CardContent>
+                            <DoctorProfileForm 
+                                onSubmit={handleProfileUpdate} 
+                                initialData={doctorProfile} 
+                            />
+                        </CardContent>
+                    </Card>
+                </TabsContent>
+            </Tabs>
         </div>
     );
 }

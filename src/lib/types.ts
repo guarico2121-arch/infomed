@@ -53,6 +53,9 @@ export interface Doctor {
   availability?: Record<string, any>; // Keeping flexible for now
   insurances?: string[];
   googleMapsUrl?: string;
+  // CRITICAL FIX: Added the missing fields for complete profile management.
+  contactPhone?: string;
+  instagramUrl?: string;
   posts?: any[]; // Define a Post type later if needed
 }
 
