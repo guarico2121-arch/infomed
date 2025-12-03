@@ -1,4 +1,3 @@
-
 import Link from 'next/link';
 import { TrendingUp, ChevronRight } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -24,7 +23,8 @@ async function getBanners(firestore: any): Promise<Banner[]> {
     return bannersSnapshot.docs.map((doc: any) => ({ id: doc.id, ...doc.data() })) as Banner[];
   } catch (error) {
     console.error("Error fetching banners:", error);
-    return []; // Return an empty array on error to prevent crashing
+    // Return an empty array on error to prevent the page from crashing.
+    return [];
   }
 }
 
@@ -38,7 +38,8 @@ async function getFeaturedDoctors(firestore: any): Promise<Doctor[]> {
     return doctorsSnapshot.docs.map((doc: any) => ({ id: doc.id, ...doc.data() })) as Doctor[];
   } catch (error) {
     console.error("Error fetching featured doctors:", error);
-    return []; // Return an empty array on error
+    // Return an empty array on error.
+    return [];
   }
 }
 
