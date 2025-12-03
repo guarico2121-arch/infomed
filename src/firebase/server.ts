@@ -15,21 +15,7 @@ export function initializeFirebaseAdmin(): { firebaseApp: App; auth: Auth; fires
     };
   }
 
-  // When deployed to App Hosting, the Admin SDK automatically discovers credentials.
-  // The service account key is only needed for local development.
-  const isProduction = process.env.NODE_ENV === 'production';
-
-  if (isProduction) {
-    const firebaseApp = initializeApp();
-    return {
-      firebaseApp,
-      auth: getAuth(firebaseApp),
-      firestore: getFirestore(firebaseApp),
-    };
-  } else {
-    // We are in a local or non-production environment.
-    // Dynamically import the service account key to avoid build errors in production.
-    try {
+  try {
       // eslint-disable-next-line @typescript-eslint/no-var-requires
       const serviceAccount = require('../../serviceAccountKey.json');
       const firebaseApp = initializeApp({
@@ -41,7 +27,9 @@ export function initializeFirebaseAdmin(): { firebaseApp: App; auth: Auth; fires
         firestore: getFirestore(firebaseApp),
       };
     } catch (e) {
-      console.error('serviceAccountKey.json not found, initializing admin SDK without it for local development. This may lead to runtime errors.');
+      console.error('serviceAccountKey.json not found or invalid, initializing admin SDK without explicit credentials. This may lead to runtime errors if default credentials are not available.');
+      // Initialize without credentials, relying on the environment.
+      // This will cause errors if the environment is not configured, but it prevents a startup crash.
       const firebaseApp = initializeApp();
       return {
         firebaseApp,
@@ -49,5 +37,4 @@ export function initializeFirebaseAdmin(): { firebaseApp: App; auth: Auth; fires
         firestore: getFirestore(firebaseApp),
       };
     }
-  }
 }
