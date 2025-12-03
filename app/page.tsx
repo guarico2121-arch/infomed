@@ -1,3 +1,4 @@
+
 import Link from 'next/link';
 import { TrendingUp, ChevronRight } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -14,21 +15,33 @@ import {
 } from '@/components/ui/carousel';
 
 async function getBanners(firestore: any): Promise<Banner[]> {
-  const bannersSnapshot = await firestore
-    .collection('banners')
-    .where('isActive', '==', true)
-    .orderBy('createdAt', 'desc')
-    .get();
-  return bannersSnapshot.docs.map((doc: any) => ({ id: doc.id, ...doc.data() })) as Banner[];
+  try {
+    const bannersSnapshot = await firestore
+      .collection('banners')
+      .where('isActive', '==', true)
+      .orderBy('createdAt', 'desc')
+      .get();
+    return bannersSnapshot.docs.map((doc: any) => ({ id: doc.id, ...doc.data() })) as Banner[];
+  } catch (error) {
+    console.error("Error fetching banners:", error);
+    // Return an empty array on error to prevent the page from crashing.
+    return [];
+  }
 }
 
 async function getFeaturedDoctors(firestore: any): Promise<Doctor[]> {
-  const doctorsSnapshot = await firestore
-    .collection('doctor_profiles')
-    .where('subscriptionStatus', '==', 'Active')
-    .limit(8)
-    .get();
-  return doctorsSnapshot.docs.map((doc: any) => ({ id: doc.id, ...doc.data() })) as Doctor[];
+  try {
+    const doctorsSnapshot = await firestore
+      .collection('doctor_profiles')
+      .where('subscriptionStatus', '==', 'Active')
+      .limit(8)
+      .get();
+    return doctorsSnapshot.docs.map((doc: any) => ({ id: doc.id, ...doc.data() })) as Doctor[];
+  } catch (error) {
+    console.error("Error fetching featured doctors:", error);
+    // Return an empty array on error.
+    return [];
+  }
 }
 
 export default async function Home() {
