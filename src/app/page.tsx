@@ -1,9 +1,11 @@
+
+'use client';
+
 import Link from 'next/link';
 import { TrendingUp, ChevronRight } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { DoctorCard } from '@/components/doctor-card';
 import type { Doctor, Banner } from '@/lib/types';
-import { initializeFirebaseAdmin } from '@/firebase/server';
 import { BannerCarousel } from '@/components/layout/banner-carousel';
 import {
   Carousel,
@@ -12,46 +14,29 @@ import {
   CarouselPrevious,
   CarouselNext,
 } from '@/components/ui/carousel';
+import { useCollection, useFirestore, useMemoFirebase } from '@/firebase';
+import { collection, query, where, orderBy, limit } from 'firebase/firestore';
+import { Skeleton } from '@/components/ui/skeleton';
 
-async function getBanners(firestore: any): Promise<Banner[]> {
-  try {
-    const bannersSnapshot = await firestore
-      .collection('banners')
-      .where('isActive', '==', true)
-      .orderBy('createdAt', 'desc')
-      .get();
-    return bannersSnapshot.docs.map((doc: any) => ({ id: doc.id, ...doc.data() })) as Banner[];
-  } catch (error) {
-    console.error("Error fetching banners:", error);
-    // Return an empty array on error to prevent the page from crashing.
-    return [];
-  }
-}
+export default function Home() {
+  const firestore = useFirestore();
 
-async function getFeaturedDoctors(firestore: any): Promise<Doctor[]> {
-  try {
-    const doctorsSnapshot = await firestore
-      .collection('doctor_profiles')
-      .where('subscriptionStatus', '==', 'Active')
-      .limit(8)
-      .get();
-    return doctorsSnapshot.docs.map((doc: any) => ({ id: doc.id, ...doc.data() })) as Doctor[];
-  } catch (error) {
-    console.error("Error fetching featured doctors:", error);
-    // Return an empty array on error.
-    return [];
-  }
-}
+  const bannersQuery = useMemoFirebase(
+    () => (firestore ? query(collection(firestore, 'banners'), where('isActive', '==', true), orderBy('createdAt', 'desc')) : null),
+    [firestore]
+  );
+  const { data: banners, isLoading: areBannersLoading } = useCollection<Banner>(bannersQuery);
 
-export default async function Home() {
-  const { firestore } = initializeFirebaseAdmin();
-  const banners = await getBanners(firestore);
-  const featuredDoctors = await getFeaturedDoctors(firestore);
+  const featuredDoctorsQuery = useMemoFirebase(
+    () => (firestore ? query(collection(firestore, 'doctor_profiles'), where('subscriptionStatus', '==', 'Active'), limit(8)) : null),
+    [firestore]
+  );
+  const { data: featuredDoctors, isLoading: areDoctorsLoading } = useCollection<Doctor>(featuredDoctorsQuery);
 
   return (
     <div className="flex flex-col bg-muted/20">
       <section id="hero-carousel" className="w-full">
-        <BannerCarousel banners={banners} />
+        <BannerCarousel banners={areBannersLoading ? null : banners} />
       </section>
 
       <section id="featured" className="w-full py-8 pt-16">
@@ -72,13 +57,24 @@ export default async function Home() {
             className="w-full"
           >
             <CarouselContent className="-ml-4">
-              {featuredDoctors.map((profile) => {
+              {areDoctorsLoading && Array.from({ length: 4 }).map((_, i) => (
+                 <CarouselItem key={i} className="pl-4 md:basis-1/2 lg:basis-1/3 xl:basis-1/4">
+                    <div className="h-full">
+                       <Skeleton className="aspect-[4/3] w-full" />
+                       <div className="p-4 space-y-2">
+                           <Skeleton className="h-5 w-3/4 rounded" />
+                           <Skeleton className="h-4 w-1/2 rounded" />
+                       </div>
+                    </div>
+                 </CarouselItem>
+              ))}
+              {!areDoctorsLoading && featuredDoctors?.map((profile) => {
                 const doctor: Doctor = {
                   ...profile,
                   id: profile.id,
                   slug: profile.id,
                   image: profile.profilePictureUrl || "",
-                  rating: 0,
+                  rating: 0, 
                   reviews: 0,
                 };
                 return (
@@ -133,3 +129,4 @@ export default async function Home() {
     </div>
   );
 }
+
