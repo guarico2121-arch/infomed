@@ -1,5 +1,4 @@
-
-import { initializeApp, getApps, App, cert } from 'firebase-admin/app';
+import { initializeApp, getApps, App } from 'firebase-admin/app';
 import { getFirestore, Firestore } from 'firebase-admin/firestore';
 import { getAuth, Auth } from 'firebase-admin/auth';
 
@@ -12,20 +11,23 @@ let firestore: Firestore;
  * It uses default credentials provided by the App Hosting environment.
  */
 export function initializeFirebaseAdmin(): { firebaseApp: App; auth: Auth; firestore: Firestore } {
-  if (!getApps().length) {
-    // This is the standard way to initialize in a Google Cloud environment.
-    // It automatically uses the service account credentials available in the runtime.
-    app = initializeApp();
-  } else {
-    app = getApps()[0];
+  // If the app is already initialized, return the existing instances.
+  if (getApps().length) {
+    const existingApp = getApps()[0];
+    return {
+      firebaseApp: existingApp,
+      auth: getAuth(existingApp),
+      firestore: getFirestore(existingApp),
+    };
   }
 
-  auth = getAuth(app);
-  firestore = getFirestore(app);
+  // If the app is not initialized, initialize it with default credentials.
+  // This is the standard practice for Google Cloud environments like App Hosting.
+  const newApp = initializeApp();
   
   return {
-    firebaseApp: app,
-    auth,
-    firestore,
+    firebaseApp: newApp,
+    auth: getAuth(newApp),
+    firestore: getFirestore(newApp),
   };
 }
